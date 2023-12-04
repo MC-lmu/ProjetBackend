@@ -3,6 +3,7 @@
 const HttpError = require('http-errors')
 const Users = require('../../models/user')
 const UserService = require("../../services/user")
+const Searches = require('../../models/homesearch')
 
 exports.create = async function(req, res, next) {
     const user = req.body;
@@ -14,12 +15,12 @@ exports.create = async function(req, res, next) {
     }
 }
 
-function runForUser(userId, callback) {
-    Users.findById(userId).then( data => {
-        if (data == null) {
+function runForUser(userId, next, callback) {
+    Users.findById(userId).then( user => {
+        if (user == null) {
             return next(HttpError(404, 'no user found with this ID'))
         }
-        return callback(data)
+        return callback(user)
     }).catch(err => {
         if (err) {
             return next(HttpError(500, err))
@@ -28,13 +29,17 @@ function runForUser(userId, callback) {
 }
 
 exports.getSelf = function(req, res, next) {
-    runForUser(req.user._id, data => {
-        return res.status(200).json(data.front)
+    runForUser(req.user._id, next, user => {
+        return res.status(200).json(user.front)
     })
 }
 
 exports.getSearchHistory = function(req, res, next) {
-    runForUser(req.user._id, data => {
-        return res.status(200).json(data.searchHistory)
+    runForUser(req.user._id, next, user => {
+        Searches.find({ 'userId': user._id }).then( data => {
+            return res.status(200).json(data)
+        }).catch( err => {
+            return next(HttpError(500, err))
+        })
     })
 }

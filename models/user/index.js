@@ -10,8 +10,7 @@ const COLLECTION_NAME = process.env.COLLECTIONS_PREFIX + "users"
     "email": "self@jmj.fr",
     "passwordHash": "4058cfd0383af73e7c7953e4fc5907bde3dafc53",
     "passwordSalt": "8c2015657e6a7420",
-    "privileges": ["AdminPrivilege"],
-    "searchHistory": []
+    "privileges": ["AdminPrivilege"]
   }
  */
 
@@ -20,8 +19,7 @@ const Schema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
     passwordSalt: { type: String, required: true },
-    privileges: [String],
-    searchHistory: [Search]
+    privileges: [String]
 })
 
 Schema.virtual('front').get(function() {

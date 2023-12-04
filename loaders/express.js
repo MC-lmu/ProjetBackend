@@ -35,7 +35,7 @@ app.use((err, req, res, next) => {
 
     //Redact server error messages outside of dev environment
     if (req.app.get('env') !== 'development' && !userError) {
-        err.message = "";
+        err.message = "An internal server error occurred.";
     }
 
     if (replyInJson) {

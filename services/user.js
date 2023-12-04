@@ -1,7 +1,8 @@
 'use strict';
 const log = require('debug')('backend:services:users')
-const User = require('../models/user')
 const AuthService = require('./auth')
+const User = require('../models/user')
+const Search = require('../models/homesearch')
 
 exports.authenticate = (user, plainPassword) => {
     log('Authenticating "%s" with password "%s"...', user.email, plainPassword)
@@ -52,4 +53,17 @@ exports.getUser = async function(email) {
         log('Error searching for user: ' + error)
         return undefined
     }
+}
+
+exports.deleteUser = async function(user) {
+    log('Deleting user "%j"...', user)
+
+    User.findByIdAndDelete(user._id).catch( err => {
+        throw new Error("Failed user deletion: " + err);
+    })
+
+    //TODO: use publisher/subscriber model
+    Search.deleteMany({ userId: user._id }).catch( err => {
+        throw new Error("Failed searches deletion: " + err);
+    })
 }
