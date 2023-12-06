@@ -17,7 +17,7 @@ exports.generateSalt = function() {
 }
 
 function hashPassword(password, salt) {
-    log('Encrypting password (%s) + salt (%s)...', password, salt)
+    log('Hashing password (%s) + salt (%s)...', password, salt)
 
     if (!password || !salt)
         return undefined
