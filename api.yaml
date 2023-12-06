@@ -1,0 +1,76 @@
+openapi: 3.0.3
+info:
+  title: DPE App
+  description: |-
+    Une application de recherche de maison par critère DPE.
+  version: 1.0.0
+servers:
+  - url: http://<server address>/api/v1
+tags:
+  - name: user
+    description: Opérations sur les comptes utilisateur
+paths:
+  /users:
+    post:
+      tags:
+        - user
+      summary: Créer un compte utilisateur
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+        required: true
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserFront'
+        '400':
+          description: Informations invalides fournie ou utilisateur déjà existant
+  /users/me/searches:
+    get:
+      tags:
+        - user
+      summary: Obtenir l'historique de recherche de l'utilisateur
+      responses:
+        '200':
+          description: Succès
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchHistory'
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        email:
+          type: string
+          example: mc@lmu.fr
+        name:
+          type: string
+          example: Mathieu CHOPLAIN
+        password:
+          type: string
+          example: MotDePasseSecret
+    UserFront:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 656d8bb9c39b2769a0b83596
+        email:
+          type: string
+          example: mc@lmu.fr
+        name:
+          type: string
+          example: Mathieu CHOPLAIN
+        privileges:
+          type: array
+          items:
+            type: string
+          example:
+            - Admin
