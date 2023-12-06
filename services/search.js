@@ -2,11 +2,14 @@
 
 const log = require('debug')('backend:services:search')
 const Logements = require('../models/logement')
-const Search = require('../models/homesearch')
-const https = require('https');
+const Searches = require('../models/homesearch')
+const http = require('http');
 const { isValidObjectId } = require('mongoose');
-
-const MAX_RESULTS_NUM = process.env.MAX_SEARCH_RESULTS
+const { 
+    NotFoundError,
+    BadRequestError,
+    ServerError
+} = require('../types/ExtError')
 
 function performSearch(search, callback) {
     var criterias = [
@@ -41,23 +44,25 @@ function performSearch(search, callback) {
     //Find matching homes in the database
     Logements.findOne({ $and: criterias }).then( data => {
         if (data === null) {
-            return callback(null, data)
+            return callback(null, {})
         }
 
         const homeAddress = data['Adresse_(BAN)'];
+        log("Found a matching home @ %s", homeAddress)
 
         //Call external API to obtain geographical data
-        //TODO: this is broken
         const options = {
             host: 'nominatim.openstreetmap.org',
             path: '/search?format=json&limit=1&q=' + encodeURI(homeAddress),
             headers: {
-                'Content-Type': 'application/json',
-                'User-Agent' : 'DPEApp/1.00'
+                //'Content-Type': 'application/json',
+                'User-Agent' : 'Mozilla/5.0 (Windows NT; Windows NT 10.0; fr-FR) WindowsPowerShell/5.1.22000.2003'
             }
         }
 
-        https.get(options, resp => {
+        log("Sending HTTP GET to '%s%s'...", options.host, options.path)
+
+        http.get(options, resp => {
             var httpData = "";
 
             resp.on('data', chunk => httpData += chunk)
@@ -65,7 +70,7 @@ function performSearch(search, callback) {
                 try {
                     const apiResponse = JSON.parse(httpData)
                     if (!apiResponse) {
-                        return callback(null, null)
+                        return callback(null, {})
                     }
                     //OpenStreetMap API returns an array of matches.
                     //Assume that the first (and usually only) element
@@ -78,51 +83,87 @@ function performSearch(search, callback) {
                         lon: parseFloat(homeDetails.lon)
                     })
                 } catch (err) {
-                    callback(err.message, null)
+                    callback(ServerError(err.message), null)
                 }
             })
-        }).on('error', (e) => callback('Nominatim API request error: ' + e, null))
+        }).on('error', e => {
+            callback(NotFoundError('Failed Geoloc data fetch from Nominatim API: ' + e), null)
+        })
     }).catch( err => {
-        if (err) {
-            callback(err, null)
+        callback(ServerError(err.message), null)
+    })
+}
+
+exports.executeNewSearch = function(userId, searchParameters, callback) {
+    const objDescriptor = {
+        code_postal: searchParameters.code_postal,
+        DPE: searchParameters.DPE,
+        GES: searchParameters.GES,
+
+        surface: searchParameters.surface,
+        surface_max: searchParameters.surface_max,
+        
+        date: searchParameters.date,
+
+        userId
+    };
+
+    //Check if an identical search already exists
+    //If so, don't actually create a new search
+    Searches.findOne(objDescriptor).then( existingSearch => {
+        if (!existingSearch) { //No existing - create new
+            const searchObject = new Searches(objDescriptor)
+            
+            //Catch malformed object before attempting to save
+            //to be able to catch the exception without async code
+            const error = searchObject.validateSync()
+            if (error != null) {
+                return callback(BadRequestError("Invalid search criteria: " + error))
+            }
+
+            //This *should* never fail due to previous validation
+            searchObject.save()
+
+            performSearch(searchObject, callback)
+        } else {
+            log('Found existing search for %o', objDescriptor)
+            performSearch(existingSearch, callback)
         }
     })
 }
 
-//Throws if the searchCriteria is invalid
-exports.executeNewSearch = function(userId, searchCriteria, callback) {
-    searchCriteria.userId = userId;
-    const searchObject = new Search(searchCriteria)
-
-    //Catch malformed object before attempting to save
-    //to be able to catch the exception without async code
-    const error = searchObject.validateSync()
-    if (error != null) {
-        throw error;
-    }
-
-    searchObject.save()
-
-    performSearch(searchObject, callback)
-}
-
-//Throws if the search ID doesn't correspond to an existing search,
-//or if the search doesn't correspond to the user
 exports.executeExistingSearch = function(userId, searchId, callback) {
     if (!isValidObjectId(searchId)) {
-        throw new Error('Malformed search ID')
+        return callback(BadRequestError("Malformed search ID"), null)
     }
 
-    try {
-        Search.findById(searchId).then(search => {
-            //Process non-existing seaches and searches belonging to
-            //another user the same way in order to not leak information
-            if (!search || search.userId.toString() !== userId.toString())
-                return callback(null, null) //HACK
+    Searches.findById(searchId).then(searchObject => {
+        //Process non-existing seaches and searches belonging to
+        //another user the same way in order to not leak information
+        if (!searchObject || searchObject.userId.toString() !== userId.toString()) {
+            return callback(NotFoundError("No search with provided ID exists"), null)
+        }
 
-            performSearch(search, callback)
+        performSearch(searchObject, callback)
+    })
+}
+
+exports.deleteSearch = function(userId, searchId, callback) {
+    if (!isValidObjectId(searchId)) {
+        return callback(BadRequestError("Malformed search ID"), null)
+    }
+
+    Searches.findById(searchId).then( searchObject => {
+        if (!searchObject || searchObject.userId.toString() !== userId.toString()) {
+            return callback(NotFoundError("No search with provided ID exists"), null)
+        }
+
+        searchObject.deleteOne().then( res => {
+            if (res.acknowledged) {
+                return callback(null, null)
+            } else {
+                return callback(ServerError("Deletion was not acknowledged"), null)
+            }
         })
-    } catch (err) {
-        throw err;
-    }
+    })
 }

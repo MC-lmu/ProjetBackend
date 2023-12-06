@@ -1,20 +1,20 @@
 'use strict';
 
 const jwt = require('jsonwebtoken')
-const HttpError = require('http-errors')
+const log = require('debug')('backend:ctrl:auth')
 const AuthService = require('../../services/auth')
 const UserService = require('../../services/user')
+const { BadRequestError } = require('../../types/ExtError')
 
 const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET
 
 exports.login = async function(req, res, next) {
     const user = await UserService.getUser(req.body?.email)
-    if (!user) {
-        return next(HttpError(400, "Invalid credentials"))
-    }
-
-    if (!UserService.authenticate(user, req.body?.password)) {
-        return next(HttpError(400, "Invalid credentials"))
+    if (!user || !UserService.authenticate(user, req.body?.password)) {
+        if (!user) {
+            log("Tried to log in with non-existent email %s", req.body.email ?? '<null>')
+        }
+        return next(BadRequestError("Invalid credentials"))
     }
 
     const accessToken = AuthService.generateAccessToken(user.front)
@@ -26,7 +26,7 @@ exports.login = async function(req, res, next) {
 
 exports.refreshToken = async function(req, res, next) {
     //"Authorization: Bearer <token>"
-    const token = req.headers['authorization']?.split('Bearer: ')?.[1]
+    const token = req.headers['authorization']?.split('Bearer ')?.[1]
     if (!token) {
         return res.sendStatus(401)
     }
@@ -40,7 +40,7 @@ exports.refreshToken = async function(req, res, next) {
         //if the user is still allowed to authenticate, etc
         const user = await UserService.getUser(payload.email)
         if (!user) {
-            return next(HttpError(400, "Invalid credentials"))
+            return next(BadRequestError("Invalid credentials"))
         }
 
         const newAccessToken = AuthService.generateAccessToken(user.front)

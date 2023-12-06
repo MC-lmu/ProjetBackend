@@ -14,8 +14,8 @@ APIs sans authentification:
 APIs avec authentification (`Bearer ` access token dans header `Authorization`):
 * GET `/users/me`: informations à propos de l'utilisateur
     * GET `/users/me/searches`: historique des recherches
-* GET `/search/new`: nouvelle recherche
-* GET `/search/existing`: relancer une recherche précédente
+* GET `/search/`: nouvelle recherche
+* GET `/search/<search ObjectId>`: relancer une recherche précédente
 
 
 # Dépendances
@@ -23,7 +23,6 @@ APIs avec authentification (`Bearer ` access token dans header `Authorization`):
 * dotenv
 * debug
 * express
-* http-errors
 * jsonwebtoken
 * mongoose
 * morgan
